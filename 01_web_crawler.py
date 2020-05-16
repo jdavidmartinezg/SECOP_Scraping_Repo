@@ -13,13 +13,12 @@ import random
 
 
 
-def RandomPause(max_wait = 10):
-    time.sleep(random.randint(0,6))
+def RandomPause(min_wait = 2, max_wait = 5):
+    time.sleep(random.randint(0,max_wait))
     return
 
 
 # SECOP 1
-
 
 # Geckodriver
 
@@ -84,6 +83,69 @@ except:
 # Resolver: No se puede conectar con reCaptcha
 # No se puede conectar con reCAPTCHA. Comprueba tu conexión e inténtalo de nuevo. -> delete adblocker (Avast)
 # Change browser to chrome
+
+'''
+"We're sorry, but your computer or network may be sending automated queries. To protect our users, we can't process your request right now."
+'''
+
+
+# SECOP 1 - Chromedriver
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
