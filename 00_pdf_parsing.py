@@ -230,47 +230,53 @@ def PDF_alimentos_pages(path, keywords = ['arroz','aceite','azúcar', 'azucar',
     
     String = "|".join(keywords)
     
-    def extract_text_by_page(pdf_path):
-        with open(pdf_path, 'rb') as fh:
-            for page in PDFPage.get_pages(fh, 
-                                          caching=True,
-                                          check_extractable=True):
-                resource_manager = PDFResourceManager()
-                fake_file_handle = io.StringIO()
-                converter = TextConverter(resource_manager, fake_file_handle)
-                page_interpreter = PDFPageInterpreter(resource_manager, converter)
-                page_interpreter.process_page(page)
-                
-                text = fake_file_handle.getvalue()
-                yield text
-        
-                # close open handles
-                converter.close()
-                fake_file_handle.close()
-        
-    def extract_text(pdf_path):
-        counter = 0
-        pages = []
-        for page in extract_text_by_page(pdf_path):
-            ResSearch = re.search(String, page.lower())
-            #print("Page", counter)
-            #print(ResSearch)
-            
-            if ResSearch != None:
-                pages.append(counter)
-            else:
-                pass
-            
-            counter = counter + 1
-        return pages
-    
-    pages = extract_text(path)
-    
     try:
-        return ','.join([str(i+1) for i in pages])
+    
+        def extract_text_by_page(pdf_path):
+            with open(pdf_path, 'rb') as fh:
+                for page in PDFPage.get_pages(fh, 
+                                              caching=True,
+                                              check_extractable=True):
+                    resource_manager = PDFResourceManager()
+                    fake_file_handle = io.StringIO()
+                    converter = TextConverter(resource_manager, fake_file_handle)
+                    page_interpreter = PDFPageInterpreter(resource_manager, converter)
+                    page_interpreter.process_page(page)
+                    
+                    text = fake_file_handle.getvalue()
+                    yield text
+            
+                    # close open handles
+                    converter.close()
+                    fake_file_handle.close()
+            
+        def extract_text(pdf_path):
+            counter = 0
+            pages = []
+            for page in extract_text_by_page(pdf_path):
+                ResSearch = re.search(String, page.lower())
+                #print("Page", counter)
+                #print(ResSearch)
+                
+                if ResSearch != None:
+                    pages.append(counter)
+                else:
+                    pass
+                
+                counter = counter + 1
+            return pages
+        
+        pages = extract_text(path)
+        
+        try:
+            return ','.join([str(i+1) for i in pages])
+        except:
+            return np.nan
+
     except:
         return np.nan
-
+    
+    
 
 def PDF_alimentos_pages_tika(path, keywords = ['arroz','aceite','azúcar', 'azucar',
                                     'café', 'cafe','harina', 'atún', 'atun', 
@@ -281,36 +287,42 @@ def PDF_alimentos_pages_tika(path, keywords = ['arroz','aceite','azúcar', 'azuc
     
     String = "|".join(keywords)
     
-    pages = []
-    
-    # Read PDF file
-    data = parser.from_file(filename, xmlContent=True)
-    xhtml_data = BeautifulSoup(data['content'])
-    for i, content in enumerate(xhtml_data.find_all('div', attrs={'class': 'page'})):
-        # Parse PDF data using TIKA (xml/html)
-        # It's faster and safer to create a new buffer than truncating it
-        # https://stackoverflow.com/questions/4330812/how-do-i-clear-a-stringio-object
-        _buffer = StringIO()
-        _buffer.write(str(content))
-        parsed_content = parser.from_buffer(_buffer.getvalue())
-    
-        # Add pages
-        text = parsed_content['content'].strip()
-        
-        ResSearch = re.search(String, text.lower())
-            #print("Page", counter)
-            #print(ResSearch)
-            
-        if ResSearch != None:
-            pages.append(i)
-        else:
-            pass
-    
     try:
-        return ','.join([str(i+1) for i in pages])
+    
+        pages = []
+        
+        # Read PDF file
+        data = parser.from_file(filename, xmlContent=True)
+        xhtml_data = BeautifulSoup(data['content'])
+        for i, content in enumerate(xhtml_data.find_all('div', attrs={'class': 'page'})):
+            # Parse PDF data using TIKA (xml/html)
+            # It's faster and safer to create a new buffer than truncating it
+            # https://stackoverflow.com/questions/4330812/how-do-i-clear-a-stringio-object
+            _buffer = StringIO()
+            _buffer.write(str(content))
+            parsed_content = parser.from_buffer(_buffer.getvalue())
+        
+            # Add pages
+            text = parsed_content['content'].strip()
+            
+            ResSearch = re.search(String, text.lower())
+                #print("Page", counter)
+                #print(ResSearch)
+                
+            if ResSearch != None:
+                pages.append(i)
+            else:
+                pass
+        
+        try:
+            return ','.join([str(i+1) for i in pages])
+        except:
+            return np.nan
+
     except:
         return np.nan
-
+    
+    
 
 def PDF_alimentos_pagesOCR(path, keywords = ['arroz','aceite','azúcar', 'azucar',
                                     'café', 'cafe','harina', 'atún', 'atun', 
@@ -701,8 +713,8 @@ os.chdir(r"D:\SECOP\2020")
 
 # secop2.to_pickle("secop2_2020_file_tree.pkl")
 
-secop2 = pd.read_pickle("secop2_2020_file_tree.pkl")
-# secop2 = pd.read_pickle("secop2_2020_file_treev2.pkl")
+# secop2 = pd.read_pickle("secop2_2020_file_tree.pkl")
+secop2 = pd.read_pickle("secop2_2020_file_treev2.pkl")
 
 
 # secop2 = secop2.drop(columns = ['Comida','Pages'])
@@ -716,30 +728,47 @@ pd.crosstab(index = secop2['PDF Type'], columns = 'Freq')/len(secop2)*100
 start = time.time()
 mask = secop2['PDF Type'] == 'Digital'
 secop2.loc[mask, 'Comida'] = secop2.loc[mask, 'AbsolutePath'].apply(PDF_alimentos)
-print('It took', time.time()-start, 'seconds.')
+print('\n\n\nIt took', time.time()-start, 'seconds.')
 # secop2.to_pickle("secop2_2020_file_treev2.pkl")
 pd.crosstab(index = secop2['Comida'], columns = 'Freq')
 # Se encontraron 415 pdfs
 
 
 # Detect food-related pdfs (Tika function in theory should be faster) ~7 min
+# Works better, it detects more pdfs than PDFMiner
 tqdm.pandas()
 start = time.time()
 mask = secop2['PDF Type'] == 'Digital'
 secop2.loc[mask, 'Comida_tika'] = secop2.loc[mask, 'AbsolutePath'].progress_apply(PDF_alimentos_tika)
-print('It took', time.time()-start, 'seconds.')
+print('\n\n\nIt took', time.time()-start, 'seconds.')
 pd.crosstab(index = secop2['Comida_tika'], columns = 'Freq')
 # secop2.to_pickle("secop2_2020_file_treev2.pkl")
+# Se encontraron 418 pdfs
 
 
-# RE RUN WITH TIKA FUNCTION!!!!!!!!!!!!!!
-# Of those pdfs containing food keywords, detect which pages have the food related information ~35 min
+# Of those pdfs containing food keywords, detect which pages have the food related information ~20 min
+tqdm.pandas()
 start = time.time()
-mask2 = secop2['Comida'] == True
-secop2.loc[mask2, 'Pages'] = secop2.loc[mask2, 'AbsolutePath'].apply(PDF_alimentos_pages) 
-print('It took', time.time()-start, 'seconds.')
+mask2 = secop2['Comida_tika'] == True
+secop2.loc[mask2, 'Pages'] = secop2.loc[mask2, 'AbsolutePath'].progress_apply(PDF_alimentos_pages) 
+print('\n\n\nIt took', time.time()-start, 'seconds.')
 # secop2.to_pickle("secop2_2020_file_treev2.pkl")
 
+
+# Of those pdfs containing food keywords... (Tika function in theory should be faster) ~3 min
+# Has problems detecting some of the cases PDFMiner works better
+tqdm.pandas()
+start = time.time()
+mask2 = secop2['Comida_tika'] == True
+secop2.loc[mask2, 'Pages_tika'] = secop2.loc[mask2, 'AbsolutePath'].progress_apply(PDF_alimentos_pages_tika) 
+print('\n\n\nIt took', time.time()-start, 'seconds.')
+# secop2.to_pickle("secop2_2020_file_treev2.pkl")
+
+# secop2 = secop2.drop(columns = ['Pages_tika',"Comida"])
+# secop2.columns = ['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Pages',
+       'Comida']
+# secop2 = secop2[['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Comida', 'Pages']]
+# secop2.to_pickle("secop2_2020_file_treev2.pkl")
 
 # Detect food-related pdfs (Scanned) ~ hrs 
 tqdm.pandas()
