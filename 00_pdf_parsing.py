@@ -37,6 +37,8 @@ import multiprocessing as mp # speedup with multicore processing
 from tqdm import tqdm
 from io import StringIO
 from bs4 import BeautifulSoup
+import pickle
+
 
 
 
@@ -360,16 +362,18 @@ def PDF_alimentos_pagesOCR(path, keywords = ['arroz','aceite','azúcar', 'azucar
 
 def ExtractTable(path,pages):
     
-    tables = camelot.read_pdf(path,
-                          pages=pages,
-                          flavor='lattice') 
-    df_list = []
-    
-    for id_df in range(len(tables)-1):
-        df_list.append(tables[id_df].df)
-    
-    return df_list 
-
+    try:
+        tables = camelot.read_pdf(path,
+                              pages=pages,
+                              flavor='lattice') 
+        df_list = []
+        
+        for id_df in range(len(tables)-1):
+            df_list.append(tables[id_df].df)
+        
+        return df_list 
+    except:
+        return np.nan
 
 #..............................................................................
 #..............................................................................
@@ -715,6 +719,7 @@ os.chdir(r"D:\SECOP\2020")
 
 # secop2 = pd.read_pickle("secop2_2020_file_tree.pkl")
 secop2 = pd.read_pickle("secop2_2020_file_treev2.pkl")
+# secop2 = pd.read_pickle("secop2_2020_file_treev3.pkl")
 
 
 # secop2 = secop2.drop(columns = ['Comida','Pages'])
@@ -765,10 +770,9 @@ print('\n\n\nIt took', time.time()-start, 'seconds.')
 # secop2.to_pickle("secop2_2020_file_treev2.pkl")
 
 # secop2 = secop2.drop(columns = ['Pages_tika',"Comida"])
-# secop2.columns = ['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Pages',
-       'Comida']
+# secop2.columns = ['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Pages','Comida']
 # secop2 = secop2[['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Comida', 'Pages']]
-# secop2.to_pickle("secop2_2020_file_treev2.pkl")
+# secop2.to_pickle("secop2_2020_file_treev3.pkl")
 
 # Detect food-related pdfs (Scanned) ~ hrs 
 tqdm.pandas()
@@ -789,20 +793,27 @@ pd.crosstab(index = secop2[secop2['PDF Type'] == "Scanned"]['Comida'], columns =
 
 
 
-# Extract tables from the pdfs and pages found
-secop2_table_dict = {}
+# Extract tables from the digital pdfs and pages found
+secop2_table_dict_digital = {}
 
-pdfs_of_interest = list(secop2[secop2['Comida'] == True].index)
+pdfs_of_interest_digital = list(secop2[(secop2['Comida'] == True)&(secop2['PDF Type'] == "Digital")].index)
 
-counter = 0
+# counter = 0
 
-start = time.time() # ~6 min
-for i in pdfs_of_interest:
-    secop2_table_dict[secop2['ID del Proceso'].iloc[i]] = ExtractTable(secop2['AbsolutePath'].iloc[i],
-                                                                       secop2['Pages'].iloc[i])
-    counter = counter + 1
-    print(counter, "OK")
-print('It took', time.time()-start, 'seconds.')
+start = time.time() # ~25 min
+for i in tqdm(pdfs_of_interest_digital):
+    secop2_table_dict_digital[secop2['ID del Proceso'].iloc[i]] = ExtractTable(secop2['AbsolutePath'].iloc[i],
+                                                           secop2['Pages'].iloc[i])
+    # counter = counter + 1
+    # print(counter, "OK")
+print('\n\n\nIt took', time.time()-start, 'seconds.')
+
+
+pickle.dump(secop2_table_dict_digital, open("secop2_table_dict_digital.pkl", "wb"))  
+
+secop2_table_dict_digital = pickle.load(open("secop2_table_dict_digital.pkl", "rb"))
+
+
 
 
 
