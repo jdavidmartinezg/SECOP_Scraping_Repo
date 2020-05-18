@@ -1,5 +1,13 @@
 # -*- coding: utf-8 -*-
 """
+Created on Sun May 17 16:39:42 2020
+
+@author: jdavi
+"""
+
+
+# -*- coding: utf-8 -*-
+"""
 Created on Sun May  3 13:49:43 2020
 
 @author: jdavi
@@ -700,252 +708,40 @@ def Path2SSD(path):
     return ssd_path
 
 
-# path = r"D:\SECOP\2020\ocr_test.pdf"
-# pages = "2,3,4,6"
-# file = "ocr_test.pdf"
-# id_contrato = "3IDContrato_testOCRid"
 
-def ExtractTableOCR(file,id_contrato,path,pages):
-    
-    folder_path = r'D:\SECOP\2020\SECOP_II' + '\\' + id_contrato + '\\' + 'Tablas_' + file.replace(".pdf","") + '\\'
-    
-    try:
-        os.mkdir(folder_path)
-        os.mkdir(folder_path+'\\'+"CroppedTables")
-        os.mkdir(folder_path+'\\'+"OpenCVFiles")
-    except:
-        pass
-    
-    df_list = []
-    
-    for page in pages.split(","):
-        
-        convert_from_path(pdf_path = path, fmt="jpeg", thread_count=4, 
-                                  first_page = int(page), last_page = int(page),
-                                  output_folder = folder_path)
-    
-    # List files in the folder
-    
-    folder_files = os.listdir(folder_path)
-    
-    page_images = []
-
-    for folder_file in folder_files:
-        if folder_file.endswith(".jpg"):
-            page_images.append(folder_file)
-    
-    for page_image in page_images:
-        
-        try:
-            SaveTable(image_path = folder_path + '\\' + page_image, 
-                      drop_path = folder_path+'\\'+"CroppedTables", 
-                      drop_name = page_image.replace("jpg",""))
-        except:
-            pass
-    
-    table_images = os.listdir(folder_path+'\\'+"CroppedTables")
-
-    for table_image in table_images:
-    
-        df = Table2Dataframe(image_path = folder_path+'\\'+"CroppedTables"+'\\'+table_image, 
-                             drop_path = folder_path+'\\'+"OpenCVFiles", 
-                             drop_name = table_image.replace("jpg",""))
-
-        df_list.append(df)
-        
-            
-    return df_list    
-        
-        
-        
-        
-        
-
-
-###############################################################################
-
-
-os.chdir(r"D:\SECOP\2020")
-
-
-
-# secop2 = PDF_Database(r'D:\SECOP\2020\SECOP_II')
-
-# secop2['PDF Type'] = secop2['AbsolutePath'].map(AnalyzePDF)
-
-# secop2.to_pickle("secop2_2020_file_tree.pkl")
-
-# secop2 = pd.read_pickle("secop2_2020_file_tree.pkl")
-secop2 = pd.read_pickle("secop2_2020_file_treev2.pkl")
-# secop2 = pd.read_pickle("secop2_2020_file_treev3.pkl")
-
-
-# secop2 = secop2.drop(columns = ['Comida','Pages'])
-
-pd.crosstab(index = secop2['PDF Type'], columns = 'Freq')/len(secop2)*100
-
-# SECOP II: 44% of PDFs are digital and 56% are scanned
-
-
-# Detect food-related pdfs (Digital) ~ 11 hrs
-start = time.time()
-mask = secop2['PDF Type'] == 'Digital'
-secop2.loc[mask, 'Comida'] = secop2.loc[mask, 'AbsolutePath'].apply(PDF_alimentos)
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-# secop2.to_pickle("secop2_2020_file_treev2.pkl")
-pd.crosstab(index = secop2['Comida'], columns = 'Freq')
-# Se encontraron 415 pdfs
-
-
-# Detect food-related pdfs (Tika function in theory should be faster) ~7 min
-# Works better, it detects more pdfs than PDFMiner
-tqdm.pandas()
-start = time.time()
-mask = secop2['PDF Type'] == 'Digital'
-secop2.loc[mask, 'Comida_tika'] = secop2.loc[mask, 'AbsolutePath'].progress_apply(PDF_alimentos_tika)
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-pd.crosstab(index = secop2['Comida_tika'], columns = 'Freq')
-# secop2.to_pickle("secop2_2020_file_treev2.pkl")
-# Se encontraron 418 pdfs
-
-
-# Of those pdfs containing food keywords, detect which pages have the food related information ~20 min
-tqdm.pandas()
-start = time.time()
-mask2 = secop2['Comida_tika'] == True
-secop2.loc[mask2, 'Pages'] = secop2.loc[mask2, 'AbsolutePath'].progress_apply(PDF_alimentos_pages) 
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-# secop2.to_pickle("secop2_2020_file_treev2.pkl")
-
-
-# Of those pdfs containing food keywords... (Tika function in theory should be faster) ~3 min
-# Has problems detecting some of the cases PDFMiner works better
-tqdm.pandas()
-start = time.time()
-mask2 = secop2['Comida_tika'] == True
-secop2.loc[mask2, 'Pages_tika'] = secop2.loc[mask2, 'AbsolutePath'].progress_apply(PDF_alimentos_pages_tika) 
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-# secop2.to_pickle("secop2_2020_file_treev2.pkl")
-
-# secop2 = secop2.drop(columns = ['Pages_tika',"Comida"])
-# secop2.columns = ['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Pages','Comida']
-# secop2 = secop2[['ID del Proceso', 'Archivo', 'AbsolutePath', 'PDF Type', 'Comida', 'Pages']]
-# secop2.to_pickle("secop2_2020_file_treev3.pkl")
-
-# Detect food-related pdfs (Scanned) ~ 50hrs for 4700 files
-tqdm.pandas()
-start = time.time()
-mask3 = secop2['PDF Type'] == 'Scanned'
-secop2.loc[mask3, 'Comida'] = secop2.loc[mask3, 'AbsolutePath'].progress_apply(PDF_alimentosOCR)
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-pd.crosstab(index = secop2[secop2['PDF Type'] == "Scanned"]['Comida'], columns = 'Freq')
-# secop2.to_pickle("secop2_2020_file_treev2OCR.pkl")
-# Se encontraron 785 pdfs
-
-# secop2_final.to_pickle("secop2_2020_file_tree_metadata.pkl")
 
 secop2 = pd.read_pickle("secop2_2020_file_tree_metadata.pkl")
 
-# Change path to SSD to speed up Tesseract reads and writes - No hace mucha diferencia
-# tqdm.pandas()
-# secop2['AbsolutePath'] = secop2['AbsolutePath'].progress_apply(Path2SSD)
-
-
-# Of those scanned pdfs detect which pages have food ~ 8hrs
-
-# Run 8 parallel processes ~3.5hrs
 
 secop2_mask4 = secop2[(secop2['PDF Type'] == 'Scanned') & (secop2['Comida'] == True)]
 secop2_mask4 = secop2_mask4.reset_index(inplace = False)
 
 # Chunks
 
-chunk1 = secop2_mask4.iloc[0:100]
-chunk2 = secop2_mask4.iloc[100:200]
-chunk3 = secop2_mask4.iloc[200:300]
-chunk4 = secop2_mask4.iloc[300:400]
-chunk5 = secop2_mask4.iloc[400:500]
-chunk6 = secop2_mask4.iloc[500:600]
-chunk7 = secop2_mask4.iloc[600:700]
-chunk8 = secop2_mask4.iloc[700:800]
+# chunk1 = secop2_mask4.iloc[0:100]
+# chunk2 = secop2_mask4.iloc[100:200]
+# chunk3 = secop2_mask4.iloc[200:300]
+# chunk4 = secop2_mask4.iloc[300:400]
+# chunk5 = secop2_mask4.iloc[400:500]
+# chunk6 = secop2_mask4.iloc[600:700]
+# chunk7 = secop2_mask4.iloc[700:800]
+
+chunk8 = secop2_mask4.iloc[500:600]
+chunk8 = chunk8.reset_index(inplace = False)
+
+chunk8_1 = chunk8.iloc[0:10]
+chunk8_2 = chunk8.iloc[10:20] 
+chunk8_3 = chunk8.iloc[20:30]
+chunk8_4 = chunk8.iloc[30:40]
+chunk8_5 = chunk8.iloc[40:50]
+chunk8_6 = chunk8.iloc[50:60]
+chunk8_7 = chunk8.iloc[60:70]
+chunk8_8 = chunk8.iloc[70:80]
+chunk8_9 = chunk8.iloc[80:90]
+chunk8_10 = chunk8.iloc[90:100]
+
 
 tqdm.pandas() 
 
-# Example chunk calculation
-chunk1['Pages'] = chunk1['AbsolutePath'].progress_apply(PDF_alimentos_pagesOCR)
-chunk1.to_pickle("chunk1.pkl")
-
-
-chunk1 = pd.read_pickle("chunk1.pkl")
-chunk2 = pd.read_pickle("chunk2.pkl")
-chunk3 = pd.read_pickle("chunk3.pkl")
-chunk4 = pd.read_pickle("chunk4.pkl")
-chunk5 = pd.read_pickle("chunk5.pkl")
-chunk6 = pd.read_pickle("chunk6.pkl")
-chunk7 = pd.read_pickle("chunk7.pkl")
-chunk8 = pd.read_pickle("chunk8.pkl")
-
-
-secop2_scanned_pages = pd.concat([chunk1,chunk2,chunk3,chunk4,chunk5,chunk6,
-                                  chunk7, chunk8])
-
-secop2_c = secop2[~((secop2['PDF Type'] == 'Scanned') & (secop2['Comida'] == True))]
-
-secop2 = pd.concat([secop2_c, secop2_scanned_pages])
-
-
-# secop2.to_pickle("secop2_2020_file_tree_metadata.pkl")
-
-# Full process ~8hrs
-tqdm.pandas() 
-mask4 = (secop2['PDF Type'] == 'Scanned') & (secop2['Comida'] == True)
-secop2.loc[mask4, 'Pages'] = secop2.loc[mask4, 'AbsolutePath'].progress_apply(PDF_alimentos_pagesOCR)
-
-
-
-
-###############################################################################
-
-
-# Table extraction
-
-
-# Digital PDFs
-
-
-# Extract tables from the digital pdfs and pages found ~60 min
-secop2_table_dict_digital = {}
-
-pdfs_of_interest_digital = list(secop2[(secop2['Comida'] == True)&(secop2['PDF Type'] == "Digital")].index)
-
-# counter = 0
-
-start = time.time() # ~25 min
-for i in tqdm(pdfs_of_interest_digital):
-    secop2_table_dict_digital[secop2['ID del Proceso'].iloc[i]] = ExtractTable(secop2['AbsolutePath'].iloc[i],
-                                                           secop2['Pages'].iloc[i])
-    # counter = counter + 1
-    # print(counter, "OK")
-print('\n\n\nIt took', time.time()-start, 'seconds.')
-
-
-pickle.dump(secop2_table_dict_digital, open("secop2_table_dict_digital.pkl", "wb"))  
-
-secop2_table_dict_digital = pickle.load(open("secop2_table_dict_digital.pkl", "rb"))
-
-
-
-# Scanned PDFs
-
-secop2_table_dict_scanned = {}
-
-pdfs_of_interest_scanned = list(secop2[(secop2['Comida'] == True)&(secop2['PDF Type'] == "Scanned")].index)
-
-for i in tqdm(pdfs_of_interest_digital):
-    secop2_table_dict_scanned[secop2['ID del Proceso'].iloc[i]] = ExtractTableOCR(file= secop2['Archivo'].iloc[i],id_contrato = secop2['ID del Proceso'].iloc[i],path = secop2['AbsolutePath'].iloc[i],pages = secop2['Pages'])
-    print(secop2['ID del Proceso'].iloc[i], "...Done")
-    
-pickle.dump(secop2_table_dict_scanned, open("secop2_table_dict_scanned.pkl", "wb"))  
-
-secop2_table_dict_scanned = pickle.load(open("secop2_table_dict_scanned.pkl", "rb"))    
-    
+chunk8_10['Pages'] = chunk8_10['AbsolutePath'].progress_apply(PDF_alimentos_pagesOCR)
+chunk8_10.to_pickle("chunk8_10.pkl")
