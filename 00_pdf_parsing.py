@@ -707,7 +707,7 @@ def Path2SSD(path):
 
 def ExtractTableOCR(file,id_contrato,path,pages):
     
-    folder_path = r'D:\SECOP\2020\SECOP_II' + '\\' + id_contrato + '\\' + 'Tablas_' + file.replace(".pdf","") + '\\'
+    folder_path = r'D:\OneDrive - Universidad del rosario\Data Science Consultations\SECOP scraping\Data\SECOP_II' + '\\' + id_contrato + '\\' + 'Tablas_' + file.replace(".pdf","") + '\\'
     
     try:
         os.mkdir(folder_path)
@@ -718,7 +718,12 @@ def ExtractTableOCR(file,id_contrato,path,pages):
     
     df_list = []
     
-    for page in pages.split(","):
+    if "," in pages:
+        pages = pages.split(",")
+    else:
+        pages = [pages]
+    
+    for page in pages:
         
         convert_from_path(pdf_path = path, fmt="jpeg", thread_count=4, 
                                   first_page = int(page), last_page = int(page),
@@ -746,13 +751,16 @@ def ExtractTableOCR(file,id_contrato,path,pages):
     table_images = os.listdir(folder_path+'\\'+"CroppedTables")
 
     for table_image in table_images:
-    
-        df = Table2Dataframe(image_path = folder_path+'\\'+"CroppedTables"+'\\'+table_image, 
-                             drop_path = folder_path+'\\'+"OpenCVFiles", 
-                             drop_name = table_image.replace("jpg",""))
-
-        df_list.append(df)
         
+        try:   
+            df = Table2Dataframe(image_path = folder_path+'\\'+"CroppedTables"+'\\'+table_image, 
+                                 drop_path = folder_path+'\\'+"OpenCVFiles", 
+                                 drop_name = table_image.replace("jpg",""))
+    
+            df_list.append(df)
+        
+        except:
+            pass
             
     return df_list    
         
@@ -941,11 +949,17 @@ secop2_table_dict_scanned = {}
 
 pdfs_of_interest_scanned = list(secop2[(secop2['Comida'] == True)&(secop2['PDF Type'] == "Scanned")].index)
 
-for i in tqdm(pdfs_of_interest_digital):
-    secop2_table_dict_scanned[secop2['ID del Proceso'].iloc[i]] = ExtractTableOCR(file= secop2['Archivo'].iloc[i],id_contrato = secop2['ID del Proceso'].iloc[i],path = secop2['AbsolutePath'].iloc[i],pages = secop2['Pages'])
-    print(secop2['ID del Proceso'].iloc[i], "...Done")
+for i in tqdm(pdfs_of_interest_scanned):
+    try:
+        print("\n")
+        secop2_table_dict_scanned[secop2['ID del Proceso'].iloc[i]] = ExtractTableOCR(file= secop2['Archivo'].iloc[i],id_contrato = secop2['ID del Proceso'].iloc[i],path = secop2['AbsolutePath'].iloc[i],pages = secop2['Pages'].iloc[i])
+        print("\n\n",secop2['ID del Proceso'].iloc[i], "...Done")
+    except:
+        print("\n\n",secop2['ID del Proceso'].iloc[i], "...ERROR")
     
 pickle.dump(secop2_table_dict_scanned, open("secop2_table_dict_scanned.pkl", "wb"))  
 
 secop2_table_dict_scanned = pickle.load(open("secop2_table_dict_scanned.pkl", "rb"))    
+
+
     
