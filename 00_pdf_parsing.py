@@ -918,7 +918,7 @@ secop2.loc[mask4, 'Pages'] = secop2.loc[mask4, 'AbsolutePath'].progress_apply(PD
 # Table extraction
 
 
-# Digital PDFs
+# Digital PDFs ~1 hr
 
 
 # Extract tables from the digital pdfs and pages found ~60 min
@@ -943,7 +943,7 @@ secop2_table_dict_digital = pickle.load(open("secop2_table_dict_digital.pkl", "r
 
 
 
-# Scanned PDFs
+# Scanned PDFs ~13 hrs
 
 secop2_table_dict_scanned = {}
 
@@ -962,4 +962,8 @@ pickle.dump(secop2_table_dict_scanned, open("secop2_table_dict_scanned.pkl", "wb
 secop2_table_dict_scanned = pickle.load(open("secop2_table_dict_scanned.pkl", "rb"))    
 
 
-    
+secop2.to_excel("secop2_2020_file_tree_metadata.xlsx")   
+
+
+
+ 
