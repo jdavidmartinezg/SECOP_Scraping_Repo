@@ -158,7 +158,7 @@ def OneRowTableFilter(df_list):
     for df in df_list:
 
         if len(df) > 1:
-            
+
             if len(df.columns) > 1:
 
                 clean_df_list.append(df)
@@ -307,7 +307,7 @@ def DigitsPct(df_column):
             pass
     try:
         return round((digit_count/word_count)*100,2)
-    except: 
+    except:
         return 0
 
 def FoodSim(df_column, food_keywords = [
@@ -423,14 +423,14 @@ def getKeysByValues(dictOfElements, listOfValues):
     for item  in listOfItems:
         if item[1] in listOfValues:
             listOfKeys.append(item[0])
-    return  listOfKeys 
+    return  listOfKeys
 
 
 def NameColumns(df, sd_threshold = 5): # Calibrar parámetro sd_threshold
-    
+
     scores = EstimateColumnsType(df)
     names = []
-    
+
     for col_num in range(max(scores.keys())+1):
         sd = sta.stdev(list(scores[col_num].values()))
         if (sd < sd_threshold) & (sd > 0) & (list(scores[col_num].values()).count(0)<2):
@@ -438,14 +438,14 @@ def NameColumns(df, sd_threshold = 5): # Calibrar parámetro sd_threshold
             max2 = sorted_scores[0:2]
             name = "-".join(getKeysByValues(scores[col_num],max2))
         elif sd == 0:
-            name = "unknown:"+str(col_num)            
+            name = "unknown:"+str(col_num)
         else:
             name = "-".join(getKeysByValue(scores[col_num],max(scores[col_num].values())))
-    
+
         names.append(name)
 
     df.columns = names
-    
+
     return df
 
 # Pueden haber múltiples columnas de precios, unidades y comida. Una opción es dejar sólo una (la que tenga el score más alto de todos las columnas) pero se podría perder información
@@ -457,13 +457,13 @@ def NameColumns(df, sd_threshold = 5): # Calibrar parámetro sd_threshold
 # Crear diccionario con contratos, un subdiccionario para cada tabla con un objeto que contenga el dataframe y otro con los scores
 
 def NameColumnsDFList(df_list):
-    
+
     renamed_df_list = []
-    
+
     for df in df_list:
-        
+
         renamed_df = NameColumns(df)
-        
+
         renamed_df_list.append(renamed_df)
 
     return renamed_df_list
@@ -473,10 +473,4 @@ secop2_table_dict_focus_named = valmap(NameColumnsDFList, secop2_table_dict_focu
 
 
 # calibrar funciones, muchos falsos positivos
-
-
-
-
-
-
-
+# probar no con 3 dígitos seguidos sino con 2 -> CALIBRAR
