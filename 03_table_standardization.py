@@ -12,6 +12,8 @@ import pickle
 import os
 from collections import Counter
 import math
+import re
+import statistics as sta
 
 os.chdir(r"D:\OneDrive - Universidad del rosario\Data Science Consultations\SECOP scraping\Data\Python Objects")
 
@@ -19,7 +21,7 @@ os.chdir(r"D:\OneDrive - Universidad del rosario\Data Science Consultations\SECO
 # Load dictionary objects
 
 secop2_table_dict_digital = pickle.load(open("secop2_table_dict_digital.pkl", "rb"))
-secop2_table_dict_scanned = pickle.load(open("secop2_table_dict_scanned.pkl", "rb"))    
+secop2_table_dict_scanned = pickle.load(open("secop2_table_dict_scanned.pkl", "rb"))
 
 
 # Mantener contratos que tienen objetos
@@ -28,9 +30,9 @@ secop2_table_dict_scanned_notempty = {k: v for k, v in secop2_table_dict_scanned
 
 
 # Para archivos tipo digital, eliminar nan:
-    
+
 secop2_table_dict_digital_notempty = {k: v for k, v in secop2_table_dict_digital.items() if type(v) is not float}
-    
+
 secop2_table_dict_digital_notempty = {k: v for k, v in secop2_table_dict_digital_notempty.items() if len(v) > 0}
 
 # Test df
@@ -58,14 +60,14 @@ secop2_table_dict_scanned_notempty = valmap(dfs2lower, secop2_table_dict_scanned
 
 
 # Filtro de tablas que contienen palabras clave:
-    
-def FilterDfs(df_list, keywords = ['arroz','aceite','azúcar', 'azucar', 'café', 'harina', 'atún', 'atun', 
+
+def FilterDfs(df_list, keywords = ['arroz','aceite','azúcar', 'azucar', 'café', 'harina', 'atún', 'atun',
                                     'panela', 'pasta', 'fríjol', 'frijol',
                                     'lenteja', 'chocolate', 'leche']):
-    
+
     keywords = "|".join(keywords)
-    
-    filtered_df_list = []    
+
+    filtered_df_list = []
     for df in df_list:
         match_sum = 0
         for col in df.columns:
@@ -90,8 +92,8 @@ secop2_table_dict_scanned_food = {k: v for k, v in secop2_table_dict_scanned_not
 # Filtro de tablas que contengan precios (números):
 
 def FilterDfsPrices(df_list):
-    
-    filtered_df_list = []    
+
+    filtered_df_list = []
     for df in df_list:
         match_sum = 0
         for col in df.columns:
@@ -119,14 +121,14 @@ def CleanDFs(df_list):
         n_df = n_df.dropna(how='all', axis=0) # filas vacías
         n_df = n_df.dropna(how='all', axis=1) # columnas vacías
         clean_df_list.append(n_df)
-        
+
     return clean_df_list
-        
+
 secop2_table_dict_digital_food_prices = valmap(CleanDFs, secop2_table_dict_digital_food_prices)
-secop2_table_dict_scanned_food_prices = valmap(CleanDFs, secop2_table_dict_scanned_food_prices)    
+secop2_table_dict_scanned_food_prices = valmap(CleanDFs, secop2_table_dict_scanned_food_prices)
 
 
-# Limpieza de tablas cuya 'sparsity' sea muy alta: Threshold 70% 
+# Limpieza de tablas cuya 'sparsity' sea muy alta: Threshold 70%
 
 def TableSparsityFilter(df_list, threshold = 0.7):
 
@@ -137,14 +139,40 @@ def TableSparsityFilter(df_list, threshold = 0.7):
         percent_missing = np.sum(df.isnull().sum())/(len(df)*len(test_df.columns))
 
         if percent_missing < threshold:
-            
+
             clean_df_list.append(df)
 
     return clean_df_list
 
 
 secop2_table_dict_digital_food_prices = valmap(TableSparsityFilter, secop2_table_dict_digital_food_prices)
-secop2_table_dict_scanned_food_prices = valmap(TableSparsityFilter, secop2_table_dict_scanned_food_prices) 
+secop2_table_dict_scanned_food_prices = valmap(TableSparsityFilter, secop2_table_dict_scanned_food_prices)
+
+
+# Limpieza de tablas cuya que solo tengan una fila o una columna
+
+def OneRowTableFilter(df_list):
+
+    clean_df_list = []
+
+    for df in df_list:
+
+        if len(df) > 1:
+            
+            if len(df.columns) > 1:
+
+                clean_df_list.append(df)
+
+    return clean_df_list
+
+
+secop2_table_dict_digital_food_prices = valmap(OneRowTableFilter, secop2_table_dict_digital_food_prices)
+secop2_table_dict_scanned_food_prices = valmap(OneRowTableFilter, secop2_table_dict_scanned_food_prices)
+
+
+
+
+
 
 
 # Combinar fuentes: Digital + Scanned
@@ -234,8 +262,8 @@ contracts_of_interest = [
 "1262541",
 "1266106"
 ]
-    
-contracts_of_interest = ["CO1.REQ."+id for id in contracts_of_interest]    
+
+contracts_of_interest = ["CO1.REQ."+id for id in contracts_of_interest]
 contracts_of_interest = list(set(contracts_of_interest)) # Remover duplicados
 
 
@@ -256,7 +284,10 @@ def counter_cosine_similarity(c1, c2):
     dotprod = np.sum(c1.get(k, 0) * c2.get(k, 0) for k in terms)
     magA = math.sqrt(np.sum(c1.get(k, 0)**2 for k in terms))
     magB = math.sqrt(np.sum(c2.get(k, 0)**2 for k in terms))
-    return dotprod / (magA * magB)
+    try:
+        return dotprod / (magA * magB)
+    except:
+        return 0
 
 def ListsSim(list1, list2):
      commonTerms = set(list1).intersection(set(list2))
@@ -266,41 +297,44 @@ def ListsSim(list1, list2):
 
 
 def DigitsPct(df_column):
-    chr_count = 0
+    word_count = 0
     digit_count = 0
     for item in df_column:
         if item != np.nan:
-            chr_count = chr_count + len(item)
-            digit_count = digit_count + len(re.findall("\d",item))
+            word_count = word_count + len(str(item).split())
+            digit_count = digit_count + len(re.findall("(?=(\d{3}))",str(item))) # 3 Digitos consecutivos, para evitar que números pequeños sean catalogados como precios
         else:
             pass
-    return round((digit_count/chr_count)*100,2)
+    try:
+        return round((digit_count/word_count)*100,2)
+    except: 
+        return 0
 
 def FoodSim(df_column, food_keywords = [
                             'arroz',
                             'aceite',
-                            'azúcar', 
-                            'azucar', 
-                            'café', 
-                            'harina', 
-                            'atún', 
-                            'atun', 
-                            'panela', 
-                            'pasta', 
-                            'fríjol', 
+                            'azúcar',
+                            'azucar',
+                            'café',
+                            'harina',
+                            'atún',
+                            'atun',
+                            'panela',
+                            'pasta',
+                            'fríjol',
                             'frijol',
-                            'lenteja', 
-                            'chocolate', 
+                            'lenteja',
+                            'chocolate',
                             'leche'
                             ]):
- 
+
     counterA = Counter(food_keywords)
-    counterB = Counter([words for segments in list(df_column) for words in segments.split()])
-        
-    
+    counterB = Counter([words for segments in list(df_column) for words in str(segments).split()])
+
+
     return round(counter_cosine_similarity(counterA, counterB) * 100,2)
-    
-    
+
+
 def UnitsSim(df_column, untis_keywords = [
                             "lb",
                             "lbr",
@@ -337,68 +371,108 @@ def UnitsSim(df_column, untis_keywords = [
                             "onzas",
                             "onz",
                             "cc"
-                            ]):   
-    
+                            ]):
+
     counterA = Counter(untis_keywords)
-    counterB = Counter([words for segments in list(df_column) for words in segments.split()])
-        
-    
+    counterB = Counter([words for segments in list(df_column) for words in str(segments).split()])
+
+
     return round(counter_cosine_similarity(counterA, counterB) * 100,2)
-    
+
 
 def EstimateColumnsType(df):
-    
-    # Parámetros: 
-        
+
+    # Parámetros:
+
     # porcentaje de dígitos sobre el total de caracteres -> DigitsPct
-    # porcentaje de similiradidad con diccionario de comida -> 
-    # procentaje de similaridad con diccionario de unidades ->
-    
+    # porcentaje de similiradidad con diccionario de comida -> FoodSim
+    # procentaje de similaridad con diccionario de unidades -> UnitsSim
+
     scores = {}
-    
+
     for col_num in range(len(df.columns)):
-        
+
         scores[col_num] = {}
-        
+
         scores[col_num]['prices'] = DigitsPct(df.iloc[:,col_num])
-        scores[col_num]['food'] = FoodSim(df.iloc[:,col_num])   
+        scores[col_num]['food'] = FoodSim(df.iloc[:,col_num])
         scores[col_num]['units'] = UnitsSim(df.iloc[:,col_num])
 
     return scores
 
-test_df2 = secop2_table_dict_focus['CO1.REQ.1262130'][5]
+#test_df2 = secop2_table_dict_focus['CO1.REQ.1262130'][5]
 
-EstimateColumnsType(test_df2)
+#EstimateColumnsType(test_df2)
 
-
-
-
-
-
+# Calcular la desviación estándar de los scores
+# Columnas con desviación estándar baja son catalogadas como las 2 columnas con mayor score
+# Columnas con desviación estándar alta, se asignan al tipo con mayor score
 
 
+def getKeysByValue(dictOfElements, valueToFind):
+    listOfKeys = list()
+    listOfItems = dictOfElements.items()
+    for item  in listOfItems:
+        if item[1] == valueToFind:
+            listOfKeys.append(item[0])
+    return  listOfKeys
+
+def getKeysByValues(dictOfElements, listOfValues):
+    listOfKeys = list()
+    listOfItems = dictOfElements.items()
+    for item  in listOfItems:
+        if item[1] in listOfValues:
+            listOfKeys.append(item[0])
+    return  listOfKeys 
+
+
+def NameColumns(df, sd_threshold = 5): # Calibrar parámetro sd_threshold
+    
+    scores = EstimateColumnsType(df)
+    names = []
+    
+    for col_num in range(max(scores.keys())+1):
+        sd = sta.stdev(list(scores[col_num].values()))
+        if (sd < sd_threshold) & (sd > 0) & (list(scores[col_num].values()).count(0)<2):
+            sorted_scores = sorted(list(scores[col_num].values()), reverse=True)
+            max2 = sorted_scores[0:2]
+            name = "-".join(getKeysByValues(scores[col_num],max2))
+        elif sd == 0:
+            name = "unknown:"+str(col_num)            
+        else:
+            name = "-".join(getKeysByValue(scores[col_num],max(scores[col_num].values())))
+    
+        names.append(name)
+
+    df.columns = names
+    
+    return df
+
+# Pueden haber múltiples columnas de precios, unidades y comida. Una opción es dejar sólo una (la que tenga el score más alto de todos las columnas) pero se podría perder información
+
+# https://github.com/scrapinghub/price-parser
 
 
 
+# Crear diccionario con contratos, un subdiccionario para cada tabla con un objeto que contenga el dataframe y otro con los scores
+
+def NameColumnsDFList(df_list):
+    
+    renamed_df_list = []
+    
+    for df in df_list:
+        
+        renamed_df = NameColumns(df)
+        
+        renamed_df_list.append(renamed_df)
+
+    return renamed_df_list
 
 
+secop2_table_dict_focus_named = valmap(NameColumnsDFList, secop2_table_dict_focus)
 
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+# calibrar funciones, muchos falsos positivos
 
 
 
