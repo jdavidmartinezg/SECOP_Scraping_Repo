@@ -14,6 +14,8 @@ from collections import Counter
 import math
 import re
 import statistics as sta
+import price_parser as pp
+import itertools
 
 os.chdir(r"D:\OneDrive - Universidad del rosario\Data Science Consultations\SECOP scraping\Data\Python Objects")
 
@@ -48,7 +50,7 @@ test_list.append(pd.DataFrame({'jkah':[4,4,4]}))
 def dfs2lower(df_list):
     new_list = []
     for df in df_list:
-        new_list.append(pd.concat([df[col].astype(str).str.lower() for col in df.columns], axis=1))
+        new_list.append(pd.concat([df[col].astype(str).str.lower() for col in df.columns], axis=1)) 
     return new_list
 
 
@@ -113,11 +115,16 @@ secop2_table_dict_scanned_food_prices = {k: v for k, v in secop2_table_dict_scan
 
 # Limpieza de tablas: quitar filas y columnas vacías
 
+def CleanExtraWhiteSpaces(s):
+    return re.sub(' {2,}', " ", s.strip()) # Limpiar espacios extra en los strings
+
 def CleanDFs(df_list):
 
     clean_df_list = []
     for df in df_list:
-        n_df = df.replace('', np.nan)
+        n_df = df.applymap(CleanExtraWhiteSpaces)
+        n_df = n_df.replace('', np.nan)
+        n_df = n_df.replace(' ', np.nan)
         n_df = n_df.dropna(how='all', axis=0) # filas vacías
         n_df = n_df.dropna(how='all', axis=1) # columnas vacías
         clean_df_list.append(n_df)
@@ -130,7 +137,7 @@ secop2_table_dict_scanned_food_prices = valmap(CleanDFs, secop2_table_dict_scann
 
 # Limpieza de tablas cuya 'sparsity' sea muy alta: Threshold 70%
 
-def TableSparsityFilter(df_list, threshold = 0.7):
+def TableSparsityFilter(df_list, threshold = 0.75):
 
     clean_df_list = []
 
@@ -149,7 +156,16 @@ secop2_table_dict_digital_food_prices = valmap(TableSparsityFilter, secop2_table
 secop2_table_dict_scanned_food_prices = valmap(TableSparsityFilter, secop2_table_dict_scanned_food_prices)
 
 
-# Limpieza de tablas cuya que solo tengan una fila o una columna
+# Volver a limpiar contratos sin objetos (esta vez por falta de precios)
+
+secop2_table_dict_digital_food_prices = {k: v for k, v in secop2_table_dict_digital_food_prices.items() if len(v) > 0}
+secop2_table_dict_scanned_food_prices = {k: v for k, v in secop2_table_dict_scanned_food_prices.items() if len(v) > 0}
+
+
+
+
+
+# Limpieza de tablas que solo tengan una fila o una columna
 
 def OneRowTableFilter(df_list):
 
@@ -168,6 +184,51 @@ def OneRowTableFilter(df_list):
 
 secop2_table_dict_digital_food_prices = valmap(OneRowTableFilter, secop2_table_dict_digital_food_prices)
 secop2_table_dict_scanned_food_prices = valmap(OneRowTableFilter, secop2_table_dict_scanned_food_prices)
+
+
+# Volver a limpiar contratos sin objetos (esta vez por falta de precios)
+
+secop2_table_dict_digital_food_prices = {k: v for k, v in secop2_table_dict_digital_food_prices.items() if len(v) > 0}
+secop2_table_dict_scanned_food_prices = {k: v for k, v in secop2_table_dict_scanned_food_prices.items() if len(v) > 0}
+
+
+
+
+
+# Limpieza de columnas y filas en tablas que tengan más del 60% de values missing
+
+def FilterMissingsColumnsRows(df_list, threshold = 0.6):
+    
+    clean_df_list = []
+       
+    for df in df_list:
+        columns2drop = []
+        rows2drop = []
+        for column in df.columns:
+            missing_rate_c = df[column].isnull().sum()/len(df[column])
+            if missing_rate_c > threshold:
+                columns2drop.append(column)
+                
+        df = df.drop(columns = columns2drop)        
+                
+        for index in df.index:
+            missing_rate_r = df.loc[index].isnull().sum()/len(df.loc[index])
+            if missing_rate_r > threshold:
+                rows2drop.append(index)            
+            
+        df = df.drop(index = rows2drop)
+        
+        clean_df_list.append(df)
+
+    return clean_df_list
+    
+secop2_table_dict_digital_food_prices = valmap(FilterMissingsColumnsRows, secop2_table_dict_digital_food_prices)
+secop2_table_dict_scanned_food_prices = valmap(FilterMissingsColumnsRows, secop2_table_dict_scanned_food_prices)
+
+# Volver a limpiar contratos sin objetos (esta vez por falta de precios)
+
+secop2_table_dict_digital_food_prices = {k: v for k, v in secop2_table_dict_digital_food_prices.items() if len(v) > 0}
+secop2_table_dict_scanned_food_prices = {k: v for k, v in secop2_table_dict_scanned_food_prices.items() if len(v) > 0}
 
 
 
@@ -206,8 +267,8 @@ for contract in secop2_table_dict.keys():
                 except:
                     nchar_list.append(0)
 
-sns.distplot(nchar_list)
-sns.boxplot(y=nchar_list, showfliers=False)
+# sns.distplot(nchar_list)
+# sns.boxplot(y=nchar_list, showfliers=False)
 
 np.percentile(np.array(nchar_list), 90)
 # 90% de las celdas tienen 24 caracteres o menos
@@ -296,20 +357,36 @@ def ListsSim(list1, list2):
      return score
 
 
-def DigitsPct(df_column):
+def DigitsPct(df_column): # A nivel de palabra
     word_count = 0
     digit_count = 0
     for item in df_column:
         if item != np.nan:
             word_count = word_count + len(str(item).split())
-            digit_count = digit_count + len(re.findall("(?=(\d{3}))",str(item))) # 3 Digitos consecutivos, para evitar que números pequeños sean catalogados como precios
+            # digit_count = digit_count + len(re.findall("(?=(\d{3}))",str(item))) # 3 Digitos consecutivos, para evitar que números pequeños sean catalogados como precios
+            digit_count = digit_count + len(re.findall("\d+((,\d+)+)?(.\d+)?(.\d+)?(,\d+)?",str(item))) # Regex especial para precios
         else:
             pass
     try:
         return round((digit_count/word_count)*100,2)
     except:
         return 0
-
+    
+def DigitsPct2(df_column): # A nivel de caracter
+    char_count = 0
+    digit_count = 0
+    for item in df_column:
+        if item != np.nan:
+            char_count = char_count + len(re.sub(" ", "", str(item))) # Número de caracteres sin tener en cuenta espacios
+            digit_count = digit_count + len(re.findall("\d",str(item))) 
+        else:
+            pass
+    try:
+        return round((digit_count/char_count)*100,2)
+    except:
+        return 0
+    
+    
 def FoodSim(df_column, food_keywords = [
                             'arroz',
                             'aceite',
@@ -328,18 +405,38 @@ def FoodSim(df_column, food_keywords = [
                             'leche'
                             ]):
 
-    counterA = Counter(food_keywords)
-    counterB = Counter([words for segments in list(df_column) for words in str(segments).split()])
+    # counterA = Counter(food_keywords)
+    # counterB = Counter([words for segments in list(df_column) for words in str(segments).split()])
 
+    # return round(counter_cosine_similarity(counterA, counterB) * 100,2)
+    
+    foods_regex = ""
+    
+    for keyword in food_keywords:
+        foods_regex = foods_regex + "(?:\\b{term}\\b)|".format(term = keyword)
+    
+    foods_regex = foods_regex[:-1] # Eliminar último |     
+    
+    num_matches = len(df_column.str.findall(foods_regex).loc[pd.notna(df_column.str.findall(foods_regex))].sum())
+    
 
-    return round(counter_cosine_similarity(counterA, counterB) * 100,2)
+    try:
 
+        return round(num_matches/len(df_column.str.split().sum())*100,2) # número de matches sobre número de palabras en columna
 
-def UnitsSim(df_column, untis_keywords = [
+    except:
+        
+        return 0.00
+    
+
+# https://regex101.com/
+def UnitsSim(df_column, units_keywords = [
                             "lb",
                             "lbr",
                             "libra",
                             "libras",
+                            "lbra",
+                            "lbras",
                             "ml",
                             "mililitro",
                             "mililitros",
@@ -347,12 +444,14 @@ def UnitsSim(df_column, untis_keywords = [
                             "grs",
                             "gramo",
                             "gramos",
+                            "gm",
+                            "gms",
                             "g",
                             "kg",
                             "kilo",
                             "kilogramo",
                             "kilos",
-                            "kilogramos"
+                            "kilogramos",
                             "bolsa",
                             "bolsas",
                             "lata",
@@ -370,14 +469,30 @@ def UnitsSim(df_column, untis_keywords = [
                             "oz",
                             "onzas",
                             "onz",
-                            "cc"
+                            "cc",
+                            "frasco",
+                            "sobre",
+                            "sbr",
+                            "sobres",
+                            "porcion",
+                            "porciones",
+                            "porción"
                             ]):
 
-    counterA = Counter(untis_keywords)
-    counterB = Counter([words for segments in list(df_column) for words in str(segments).split()])
+    
+    units_regex = ""
+    
+    for keyword in units_keywords:
+        units_regex = units_regex + "(?:\\b{term}\s\d+)|(?:\\b{term}\\b)|(?:\d+\s{term}\\b)|(?:\\b{term}\d+)|(?:\d+{term}\\b)".format(term = keyword) + "|" 
+        # units_regex = units_regex + "(?:\\b{term}\s((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)))|(?:\\b{term}\\b)|(?:((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+))\s{term}\\b)|(?:\\b{term}((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)))|(?:((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)){term}\\b)".format(term = keyword) + "|" 
+        # regex que tiene en cuenta decimales, usar: list(itertools.chain.from_iterable(list2d))
+    
+    
+    units_regex = units_regex[:-1] # Eliminar último | 
+    
+    num_matches = len(df_column.str.findall(units_regex).loc[pd.notna(df_column.str.findall(units_regex))].sum())
 
-
-    return round(counter_cosine_similarity(counterA, counterB) * 100,2)
+    return round(num_matches/len(df_column)*100,2) # número de matches sobre número de items en columna
 
 
 def EstimateColumnsType(df):
@@ -395,14 +510,17 @@ def EstimateColumnsType(df):
         scores[col_num] = {}
 
         scores[col_num]['prices'] = DigitsPct(df.iloc[:,col_num])
+        #scores[col_num]['prices'] = DigitsPct2(df.iloc[:,col_num])
         scores[col_num]['food'] = FoodSim(df.iloc[:,col_num])
         scores[col_num]['units'] = UnitsSim(df.iloc[:,col_num])
 
     return scores
 
 #test_df2 = secop2_table_dict_focus['CO1.REQ.1262130'][5]
+#test_df3 = secop2_table_dict_focus['CO1.REQ.1229650'][5]
+#df_column = test_df3.iloc[:,0]
 
-#EstimateColumnsType(test_df2)
+#EstimateColumnsType(test_df3)
 
 # Calcular la desviación estándar de los scores
 # Columnas con desviación estándar baja son catalogadas como las 2 columnas con mayor score
@@ -472,5 +590,12 @@ def NameColumnsDFList(df_list):
 secop2_table_dict_focus_named = valmap(NameColumnsDFList, secop2_table_dict_focus)
 
 
+
 # calibrar funciones, muchos falsos positivos
 # probar no con 3 dígitos seguidos sino con 2 -> CALIBRAR
+# 3 dígitos es muy común encontrar en unidades
+# Tratar expresiones regulares para precios y Unidades
+
+
+
+
