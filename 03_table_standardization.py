@@ -16,6 +16,9 @@ import re
 import statistics as sta
 import price_parser as pp
 import itertools
+import datetime as dt
+from pandas import ExcelWriter
+from pandas import ExcelFile
 
 os.chdir(r"D:\OneDrive - Universidad del rosario\Data Science Consultations\SECOP scraping\Data\Python Objects")
 
@@ -364,7 +367,8 @@ def DigitsPct(df_column): # A nivel de palabra
         if item != np.nan:
             word_count = word_count + len(str(item).split())
             # digit_count = digit_count + len(re.findall("(?=(\d{3}))",str(item))) # 3 Digitos consecutivos, para evitar que números pequeños sean catalogados como precios
-            digit_count = digit_count + len(re.findall("\d+((,\d+)+)?(.\d+)?(.\d+)?(,\d+)?",str(item))) # Regex especial para precios
+            # digit_count = digit_count + len(re.findall("\d+((,\d+)+)?(.\d+)?(.\d+)?(,\d+)?",str(item))) # Regex especial para precios
+            digit_count = digit_count + len(re.findall("\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})",str(item)))
         else:
             pass
     try:
@@ -592,9 +596,186 @@ secop2_table_dict_focus_named = valmap(NameColumnsDFList, secop2_table_dict_focu
 
 
 # calibrar funciones, muchos falsos positivos
-# probar no con 3 dígitos seguidos sino con 2 -> CALIBRAR
-# 3 dígitos es muy común encontrar en unidades
-# Tratar expresiones regulares para precios y Unidades
+
+# Test cases para precios:
+    
+prices_test_cases = pd.read_csv('prices_test_cases.txt', sep="\n", header=None)    
+prices_test_cases.columns = ['test_case']
+prices_test_cases['test_case'] = prices_test_cases['test_case'].str.strip()
+prices_test_cases['nchar'] = prices_test_cases['test_case'].map(len)
+prices_test_cases['type'] = prices_test_cases['test_case'].apply(lambda x: re.sub("\d","",x))
+prices_test_cases['group'] = prices_test_cases['nchar'].astype(str) + prices_test_cases['type']
+prices_test_cases = prices_test_cases.sort_values(['nchar'], ascending = False)
+
+writer = pd.ExcelWriter('prices_test_cases_sorted.xlsx', engine='xlsxwriter')
+prices_test_cases.to_excel(writer, sheet_name='Ex1')
+writer.save()
+# Use RegexMagic 
+
+
+# Para cada dataset en cada contrato se iteran todas las filas buscando productos, unidades, cantidades y precios
+
+def ScanTableDict(table_dict, 
+                  food_keywords = [
+                            'arroz',
+                            'aceite',
+                            'azúcar',
+                            'azucar',
+                            'café',
+                            'harina',
+                            'atún',
+                            'atun',
+                            'panela',
+                            'pasta',
+                            'fríjol',
+                            'frijol',
+                            'lenteja',
+                            'chocolate',
+                            'leche',
+                            'sal'
+                            ],
+                  units_keywords = [
+                            "lb",
+                            "lbr",
+                            "libra",
+                            "libras",
+                            "lbra",
+                            "lbras",
+                            "ml",
+                            "mililitro",
+                            "mililitros",
+                            "gr",
+                            "grs",
+                            "gramo",
+                            "gramos",
+                            "gm",
+                            "gms",
+                            "g",
+                            "kg",
+                            "kilo",
+                            "kilogramo",
+                            "kilos",
+                            "kilogramos",
+                            "bolsa",
+                            "bolsas",
+                            "lata",
+                            "latas",
+                            "paquete",
+                            "paquetes",
+                            "unidad",
+                            "unid",
+                            "unds",
+                            "unidades",
+                            "botella",
+                            "botellas",
+                            "empaque",
+                            "empaques",
+                            "oz",
+                            "onzas",
+                            "onz",
+                            "cc",
+                            "frasco",
+                            "sobre",
+                            "sbr",
+                            "sobres",
+                            "porcion",
+                            "porciones",
+                            "porción"
+                            ]):
+    # table_dict = secop2_table_dict_focus_named
+    # df = test_df2
+    # row_num = 0
+    secop2_products_per_contract = {}
+    
+    units_regex = ""
+    
+    for keyword in units_keywords:
+        units_regex = units_regex + "(?:\d+\s{term}\\b)|(?:\d+{term}\\b)".format(term = keyword) + "|" 
+        # units_regex = units_regex + "(?:\\b{term}\s((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)))|(?:\\b{term}\\b)|(?:((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+))\s{term}\\b)|(?:\\b{term}((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)))|(?:((?:\d+.\d+)|(?:\d+,\d+)|(?:\d+)){term}\\b)".format(term = keyword) + "|" 
+        # regex que tiene en cuenta decimales, usar: list(itertools.chain.from_iterable(list2d))
+        
+    units_regex = units_regex[:-1] # Eliminar último |
+    
+    for contract in table_dict.keys():
+        secop2_products_per_contract[contract] = {}
+        for df in table_dict[contract]:
+            df['combined'] = df[df.columns].apply(lambda row: ' '.join(row.values.astype(str)), axis=1)
+            for row_num in range(len(df)):
+                try:
+                    product = list(set(re.findall("|".join(food_keywords), df.iloc[row_num,-1])))[0]
+                except:
+                    product = "Unkown"
+                # price = list(set(re.findall("\d+((,\d+)+)?(.\d+)?(.\d+)?(,\d+)?", df.iloc[row_num,-1])))
+                # prices = list(set(re.findall("\d{1,3}(?:[.,]\d{3})*(?:[.,]\d{2})", df.iloc[row_num,-1])))
+                prices = list(set(re.findall("\$ [0-9]\.[0-9]0{2}|\$ [0-9]\.[0-9]{2}0\.0{2}|\$ [0-9]0[0-9].0{2}|\$ [0-9]{2}\.[0-9]{2}0\.0{2}|\$80{2}|\$[0-9]{2}0{3}\.0{2}|8[0-9]0|[0-9]\.[0-9]{2}0|.{3}[0-9]0{2}", df.iloc[row_num,-1])))
+                try:
+                    price = [price for price in prices if len(price) == min([len(price) for price in prices])][0] # dejar precio mínimo en términos de caracteres
+                except:
+                    price = "Unkown"
+                # price = pp.Price.fromstring(df.iloc[row_num,-1])
+                try:
+                    units = list(set(re.findall(units_regex, df.iloc[row_num,-1])))[0]
+                except:
+                    units = "Unkown"
+                    
+                quantitites = list(set(re.findall("\\b\d+\\b", df.iloc[row_num,-1])))
+                quantities_chr = [quantity for quantity in quantitites if len(quantity) == min([len(quantity) for quantity in quantitites])]
+                try:
+                    quantity = min([int(q) for q in quantities_chr])
+                except:
+                    quantity = "Unkown"
+                
+                if (product != "Unkown") and (price != "Unkown") and (units != "Unkown") and (quantity != "Unkown"):
+                    
+                    if product not in secop2_products_per_contract[contract].keys():
+                        secop2_products_per_contract[contract][product] = {"price":price,
+                                                                       "units":units,
+                                                                       "quantity":quantity}
+                    
+    return secop2_products_per_contract
+
+
+
+secop2_products_per_contract = ScanTableDict(secop2_table_dict_focus_named)
+
+secop2_products_per_contract_df = pd.DataFrame.from_dict({(i,j): secop2_products_per_contract[i][j] 
+                           for i in secop2_products_per_contract.keys() 
+                           for j in secop2_products_per_contract[i].keys()},
+                       orient='index')
+
+secop2_products_per_contract_df = secop2_products_per_contract_df.reset_index()
+
+secop2_products_per_contract_df.columns = ['ID del Proceso', 'Producto', 'Precio', 'Unidades', 'Cantidad']
+
+# Pegar información de fecha, semana del 2020, municipio
+
+# cargar módulo 02_db_filter
+
+secop2_extra_info = secop2_2020_UM_alimentos[['ID del Proceso','Fecha de Publicacion del Proceso', 'Ciudad de la Unidad de Contratación']]
+
+secop2_extra_info.columns = ['ID del Proceso','Fecha', 'Municipio']
+
+secop2_extra_info['Fecha'] = pd.to_datetime(secop2_extra_info['Fecha'])
+
+secop2_extra_info['Semana del 2020'] = secop2_extra_info['Fecha'].dt.week
+
+
+
+secop2_products_per_contract_df = pd.merge(
+    secop2_products_per_contract_df,
+    secop2_extra_info,
+    on = "ID del Proceso",
+    how = 'left')
+
+
+
+
+
+
+
+
+
+
 
 
 
